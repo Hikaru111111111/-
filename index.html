@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+</title>6x6 ミニ・ハルマ</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            background-color: #f0f2f5;
+            margin-top: 30px;
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+        }
+        #status {
+            font-size: 18px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #555;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(6, 60px);
+            grid-template-rows: repeat(6, 60px);
+            gap: 4px;
+            justify-content: center;
+            background-color: #888;
+            padding: 4px;
+            border-radius: 8px;
+            width: fit-content;
+            margin: 0 auto 20px auto;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            background-color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        /* 陣地の色分け */
+        .camp-red { background-color: #ffe6e6; }
+        .camp-blue { background-color: #e6f0ff; }
+
+        .cell.selected {
+            background-color: #ffeb3b !important;
+        }
+        .piece {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+        .piece-red { background-color: #e74c3c; }
+        .piece-blue { background-color: #3498db; }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>6x6 ミニ・ハルマ</h1>
+    <div id="status">赤のターン（駒を選んでください）</div>
+    <div id="board"></div>
+    <button onclick="resetGame()">ゲームをリセット</button>
+
+    <script>
+        const BOARD_SIZE = 6;
+        let board = [];
+        let turn = 'red'; // 'red' または 'blue'
+        let selectedPiece = null;
+
+        // 初期配置 (6x6版: 左上2x2が赤の陣地、右下2x2が青の陣地)
+        function initBoard() {
+            board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+            
+            // 赤の初期配置 (左上 2x2)
+            board[0][0] = 'red';
+            board[0][1] = 'red';
+            board[1][0] = 'red';
+            board[1][1] = 'red';
+
+            // 青の初期配置 (右下 2x2)
+            board[4][4] = 'blue';
+            board[4][5] = 'blue';
+            board[5][4] = 'blue';
+            board[5][5] = 'blue';
+
+            turn = 'red';
+            selectedPiece = null;
+            updateStatus();
+            renderBoard();
+        }
+
+        function renderBoard() {
+            const boardElement = document.getElementById('board');
+            boardElement.innerHTML = '';
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+
+                    // 陣地の背景色を設定
+                    if ((r < 2 && c < 2)) cell.classList.add('camp-blue'); // 赤のスタート地点 (青のゴール)
+                    if ((r >= 4 && c >= 4)) cell.classList.add('camp-red');  // 青のスタート地点 (赤のゴール)
+
+                    if (selectedPiece && selectedPiece.r === r && selectedPiece.c === c) {
+                        cell.classList.add('selected');
+                    }
+
+                    const piece = board[r][c];
+                    if (piece) {
+                        const pieceElement = document.createElement('div');
+                        pieceElement.classList.add('piece', `piece-${piece}`);
+                        pieceElement.innerText = piece === 'red' ? '赤' : '青';
+                        cell.appendChild(pieceElement);
+                    }
+
+                    cell.addEventListener('click', () => handleCellClick(r, c));
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        function handleCellClick(r, c) {
+            const clickedPiece = board[r][c];
+
+            if (selectedPiece) {
+                if (isValidMove(selectedPiece.r, selectedPiece.c, r, c)) {
+                    // 移動を実行
+                    board[r][c] = board[selectedPiece.r][selectedPiece.c];
+                    board[selectedPiece.r][selectedPiece.c] = null;
+
+                    // 勝利判定
+                    if (checkWinCondition()) {
+                        renderBoard();
+                        document.getElementById('status').innerText = `${turn === 'red' ? '赤' : '青'} の勝利です！ 🎉`;
+                        document.getElementById('board').style.pointerEvents = 'none';
+                        return;
+                    }
+
+                    // ターン交代
+                    turn = turn === 'red' ? 'blue' : 'red';
+                    selectedPiece = null;
+                    updateStatus();
+                    renderBoard();
+                } else {
+                    if (clickedPiece === turn) {
+                        selectedPiece = { r, c };
+                        renderBoard();
+                    } else {
+                        selectedPiece = null;
+                        renderBoard();
+                    }
+                }
+            } else {
+                if (clickedPiece === turn) {
+                    selectedPiece = { r, c };
+                    renderBoard();
+                }
+            }
+        }
+
+        // 移動・ジャンプの判定ロジック
+        function isValidMove(sr, sc, tr, tc) {
+            if (board[tr][tc] !== null) return false;
+
+            const dr = Math.abs(tr - sr);
+            const dc = Math.abs(tc - sc);
+
+            // 1マス移動（上下左右・斜めどこでも1マス）
+            if (dr <= 1 && dc <= 1) {
+                return true;
+            }
+
+            // ジャンプ移動（2マス離れていて、間に駒がある場合）
+            if ((dr === 2 && dc === 0) || (dr === 0 && dc === 2) || (dr === 2 && dc === 2)) {
+                const midR = (sr + tr) / 2;
+                const midC = (sc + tc) / 2;
+                if (board[midR][midC] !== null) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // 勝利条件の判定
+        function checkWinCondition() {
+            let redWon = true;
+            for (let r = 4; r < 6; r++) {
+                for (let c = 4; c < 6; c++) {
+                    if (board[r][c] !== 'red') redWon = false;
+                }
+            }
+
+            let blueWon = true;
+            for (let r = 0; r < 2; r++) {
+                for (let c = 0; c < 2; c++) {
+                    if (board[r][c] !== 'blue') blueWon = false;
+                }
+            }
+
+            return (turn === 'red' && redWon) || (turn === 'blue' && blueWon);
+        }
+
+        function updateStatus() {
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = `${turn === 'red' ? '赤' : '青'} のターン（自分の駒をクリックしてください）`;
+            document.getElementById('board').style.pointerEvents = 'auto';
+        }
+
+        function resetGame() {
+            initBoard();
+        }
+
+        // 初期化実行
+        initBoard();
+    </script>
+</body>
+</html>
